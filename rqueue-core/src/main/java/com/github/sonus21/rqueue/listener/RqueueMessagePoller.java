@@ -1,16 +1,16 @@
 /*
- *  Copyright 2021 Sonu Kumar
+ * Copyright (c) 2020-2023 Sonu Kumar
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * You may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *         https://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
- *   Unless required by applicable law or agreed to in writing, software
- *   distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
  *
  */
 
@@ -100,6 +100,11 @@ abstract class RqueueMessagePoller extends MessageContainerBase {
     return true;
   }
 
+  protected boolean hasAvailableThreads(QueueDetail queueDetail, QueueThreadPool queueThreadPool) {
+    return queueThreadPool.availableThreads() > 0;
+  }
+
+
   protected int getBatchSize(QueueDetail queueDetail, QueueThreadPool queueThreadPool) {
     int batchSize = Math.min(queueDetail.getBatchSize(), queueThreadPool.availableThreads());
     batchSize = Math.max(batchSize, Constants.MIN_BATCH_SIZE);
@@ -116,6 +121,8 @@ abstract class RqueueMessagePoller extends MessageContainerBase {
     }
   }
 
+  // at this point of time, we've acquired batchSize semaphore that means its guarantee that we'll
+  // have batchSize available threads in the thread pool
   private void pollAndExecute(
       int index,
       String queue,
@@ -125,25 +132,29 @@ abstract class RqueueMessagePoller extends MessageContainerBase {
     if (isQueueActive(queue)) {
       try {
         List<RqueueMessage> messages = getMessages(queueDetail, batchSize);
-        log(Level.DEBUG, "Queue: {} Fetched Msgs {}", null, queue, messages);
+        log(Level.TRACE, "Queue: {} Fetched Msgs {}", null, queue, messages);
         int messageCount = CollectionUtils.isEmpty(messages) ? 0 : messages.size();
-        if (messageCount == 0) {
-          deactivate(index, queue, DeactivateType.NO_MESSAGE);
-        }
+        // free additional requested threads e.g 10 requested but only 5 messages are there
         queueThreadPool.release(batchSize - messageCount);
         if (messageCount > 0) {
           sendMessagesToExecutor(queueDetail, queueThreadPool, messages);
+        } else {
+          deactivate(index, queue, DeactivateType.NO_MESSAGE);
         }
       } catch (Exception e) {
         queueThreadPool.release(batchSize);
         log(Level.WARN, "Listener failed for the queue {}", e, queue);
         deactivate(index, queue, DeactivateType.POLL_FAILED);
       }
+    } else {
+      // release resource
+      queueThreadPool.release(batchSize);
     }
   }
 
-  void poll(int index, String queue, QueueDetail queueDetail, QueueThreadPool queueThreadPool) {
-    log(Level.DEBUG, "Polling queue {}", null, queue);
+  void poll(int index, String queue, QueueDetail queueDetail,
+      QueueThreadPool queueThreadPool) {
+    log(Level.TRACE, "Polling queue {}", null, queue);
     int batchSize = getBatchSize(queueDetail, queueThreadPool);
     boolean acquired;
     try {

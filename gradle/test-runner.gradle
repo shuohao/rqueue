@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Sonu Kumar
+ * Copyright (c) 2022-2023 Sonu Kumar
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,8 @@
  */
 
 test {
-    String itags = System.getProperty("includeTags") ? System.getProperty("includeTags") : ''
-    String etags = System.getProperty("excludeTags") ? System.getProperty("excludeTags") : ''
+    String itags = System.getProperty("includeTags") ? System.getProperty("includeTags") : ""
+    String etags = System.getProperty("excludeTags") ? System.getProperty("excludeTags") : ""
     useJUnitPlatform {
         if (itags != "") {
             includeTags itags.split(",")
@@ -25,6 +25,7 @@ test {
             excludeTags etags.split(",")
         }
     }
+
     jacoco {
         if (System.getenv("CIRCLECI") == "true") {
             destinationFile = file("$buildDir/reports/jacoco/${System.env.CIRCLE_WORKFLOW_JOB_ID}_test.exec")
@@ -32,10 +33,17 @@ test {
             destinationFile = file("$buildDir/reports/jacoco/test.exec")
         }
     }
+
     reports {
-        junitXml.enabled = System.getenv("CIRCLECI") == "true"
+        junitXml.enabled = true
         junitXml.destination = file("$buildDir/reports/junit/xml")
         html.enabled = System.getenv("CIRCLECI") != "true"
         html.destination = file("$buildDir/reports/junit/html")
+    }
+
+    retry {
+        failOnPassedAfterRetry = false
+        maxFailures = 10
+        maxRetries = 1
     }
 }

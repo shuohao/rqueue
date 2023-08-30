@@ -1,16 +1,16 @@
 /*
- *  Copyright 2021 Sonu Kumar
+ * Copyright (c) 2021-2023 Sonu Kumar
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * You may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *         https://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
- *   Unless required by applicable law or agreed to in writing, software
- *   distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
  *
  */
 
@@ -23,11 +23,14 @@ import com.github.sonus21.rqueue.spring.boot.tests.SpringBootIntegrationTest;
 import com.github.sonus21.rqueue.test.dto.Email;
 import com.github.sonus21.rqueue.test.tests.BasicListenerTest;
 import java.util.List;
-import javax.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.api.TestInstance.Lifecycle;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.test.context.ContextConfiguration;
@@ -40,25 +43,26 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 @Slf4j
 @TestPropertySource(
     properties = {
-      "rqueue.retry.per.poll=1000",
-      "spring.redis.port=8020",
-      "reservation.request.dead.letter.consumer.enabled=true",
-      "reservation.request.active=true",
-      "list.email.queue.enabled=true",
-      "mysql.db.name=ReactiveWebTest",
-      "use.system.redis=false",
-      "user.banned.queue.active=true",
-      "spring.main.web-application-type=reactive"
+        "rqueue.retry.per.poll=1000",
+        "spring.data.redis.port=8020",
+        "list.email.queue.enabled=true",
+        "mysql.db.name=ReactiveWebTest",
+        "use.system.redis=false",
+        "spring.main.web-application-type=reactive"
     })
 @SpringBootIntegrationTest
 @EnabledIfEnvironmentVariable(named = "RQUEUE_REACTIVE_ENABLED", matches = "true")
+@AutoConfigureWebTestClient(timeout = "10000")
+@TestInstance(Lifecycle.PER_CLASS)
 class ReactiveWebViewTest extends BasicListenerTest {
 
-  @Autowired private WebTestClient webTestClient;
-  @Autowired private RqueueConfig rqueueConfig;
+  @Autowired
+  private WebTestClient webTestClient;
+  @Autowired
+  private RqueueConfig rqueueConfig;
+  private boolean initialized = false;
 
-  @PostConstruct
-  public void init() throws TimedOutException {
+  private void initialize() throws TimedOutException {
     verifyListMessageListener(); // list email queue
     verifySimpleTaskExecution(); // notification queue
     verifyScheduledTaskExecution(); // job queue
@@ -68,6 +72,14 @@ class ReactiveWebViewTest extends BasicListenerTest {
         (i) -> 30_000L,
         10,
         true);
+  }
+
+  @BeforeEach
+  public void init() throws TimedOutException {
+    if (!initialized) {
+      initialize();
+      initialized = true;
+    }
   }
 
   @Test

@@ -1,20 +1,25 @@
 /*
- *  Copyright 2021 Sonu Kumar
+ * Copyright (c) 2020-2023 Sonu Kumar
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * You may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *         https://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
- *   Unless required by applicable law or agreed to in writing, software
- *   distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
  *
  */
 
 package com.github.sonus21.rqueue.listener;
+
+import static com.github.sonus21.rqueue.listener.RqueueMessageHeaders.buildMessageHeaders;
+import static com.github.sonus21.rqueue.utils.Constants.DELTA_BETWEEN_RE_ENQUEUE_TIME;
+import static com.github.sonus21.rqueue.utils.Constants.ONE_MILLI;
+import static com.github.sonus21.rqueue.utils.Constants.REDIS_KEY_SEPARATOR;
 
 import com.github.sonus21.rqueue.core.Job;
 import com.github.sonus21.rqueue.core.RqueueBeanProvider;
@@ -28,16 +33,13 @@ import com.github.sonus21.rqueue.models.db.MessageMetadata;
 import com.github.sonus21.rqueue.models.enums.ExecutionStatus;
 import com.github.sonus21.rqueue.models.enums.MessageStatus;
 import com.github.sonus21.rqueue.utils.QueueThreadPool;
+import java.util.Collections;
+import java.util.List;
 import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessagingException;
 import org.springframework.messaging.support.MessageBuilder;
-import java.util.Collections;
-import java.util.List;
-
-import static com.github.sonus21.rqueue.listener.RqueueMessageHeaders.buildMessageHeaders;
-import static com.github.sonus21.rqueue.utils.Constants.*;
 
 class RqueueExecutor extends MessageContainerBase {
 
@@ -135,18 +137,26 @@ class RqueueExecutor extends MessageContainerBase {
   }
 
   private boolean isMessageDeleted() {
-    if (job.getMessageMetadata().isDeleted()) {
-      return true;
+    MessageMetadata messageMetadata = job.getMessageMetadata();
+    boolean deleted = messageMetadata.isDeleted();
+    if (!deleted) {
+      // fetch latest from DB
+      MessageMetadata newMessageMetadata =
+          beanProvider
+              .getRqueueMessageMetadataService()
+              .getOrCreateMessageMetadata(job.getRqueueMessage());
+      messageMetadata.merge(newMessageMetadata);
     }
-    MessageMetadata newMessageMetadata =
-        beanProvider
-            .getRqueueMessageMetadataService()
-            .getOrCreateMessageMetadata(job.getRqueueMessage());
-    if (!newMessageMetadata.equals(job.getMessageMetadata())) {
-      // TODO what happens to the current execution data
-      job.setMessageMetadata(newMessageMetadata);
+    deleted = messageMetadata.isDeleted();
+    if (deleted) {
+      if (rqueueMessage.isPeriodic()) {
+        log(Level.INFO, "Periodic Message {} having period {} has been deleted", null,
+            rqueueMessage.getId(), rqueueMessage.getPeriod());
+      } else {
+        log(Level.INFO, "Message {} has been deleted", null, rqueueMessage.getId());
+      }
     }
-    return job.getMessageMetadata().isDeleted();
+    return deleted;
   }
 
   private boolean shouldIgnore() {
@@ -156,7 +166,7 @@ class RqueueExecutor extends MessageContainerBase {
   private boolean isOldMessage() {
     return job.getMessageMetadata().getRqueueMessage() != null
         && job.getMessageMetadata().getRqueueMessage().getQueuedTime()
-            != job.getRqueueMessage().getQueuedTime();
+        != job.getRqueueMessage().getQueuedTime();
   }
 
   private int getRetryCount() {
@@ -315,7 +325,10 @@ class RqueueExecutor extends MessageContainerBase {
         message.getProcessAt());
   }
 
-  private void processPeriodicMessage() {
+  private void schedulePeriodicMessage() {
+    if (isMessageDeleted()) {
+      return;
+    }
     RqueueMessage newMessage =
         job.getRqueueMessage().toBuilder()
             .processAt(job.getRqueueMessage().nextProcessAt())
@@ -334,13 +347,17 @@ class RqueueExecutor extends MessageContainerBase {
                 messageKey,
                 newMessage,
                 expiryInSeconds));
+  }
+
+  private void handlePeriodicMessage() {
+    schedulePeriodicMessage();
     handleMessage();
   }
 
   private void handle() {
     try {
-      if (job.getRqueueMessage().isPeriodicTask()) {
-        processPeriodicMessage();
+      if (job.getRqueueMessage().isPeriodic()) {
+        handlePeriodicMessage();
       } else {
         handleMessage();
       }

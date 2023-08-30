@@ -1,16 +1,16 @@
 /*
- *  Copyright 2021 Sonu Kumar
+ * Copyright (c) 2021-2023 Sonu Kumar
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * You may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *         https://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
- *   Unless required by applicable law or agreed to in writing, software
- *   distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
  *
  */
 
@@ -31,17 +31,17 @@ import com.github.sonus21.rqueue.models.db.RqueueJob;
 import com.github.sonus21.rqueue.models.enums.ExecutionStatus;
 import com.github.sonus21.rqueue.models.enums.JobStatus;
 import com.github.sonus21.rqueue.models.enums.MessageStatus;
+import com.github.sonus21.rqueue.utils.Constants;
 import com.github.sonus21.rqueue.utils.TimeoutUtils;
 import com.github.sonus21.rqueue.web.service.RqueueMessageMetadataService;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.RedisSystemException;
-import org.springframework.util.CollectionUtils;
 import java.io.Serializable;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.RedisSystemException;
+import org.springframework.util.CollectionUtils;
 
 @Slf4j
 @SuppressWarnings("java:S107")
@@ -82,7 +82,7 @@ public class JobImpl implements Job {
     this.postProcessingHandler = postProcessingHandler;
     this.rqueueJob = new RqueueJob(rqueueConfig.getJobId(), rqueueMessage, messageMetadata, null);
     this.expiry = Duration.ofMillis(2 * queueDetail.getVisibilityTimeout());
-    this.isPeriodicJob = rqueueMessage.isPeriodicTask();
+    this.isPeriodicJob = rqueueMessage.isPeriodic();
     this.rqueueLockManager = rqueueLockManager;
     if (rqueueConfig.isJobEnabled()) {
       if (!isPeriodicJob) {
@@ -292,21 +292,28 @@ public class JobImpl implements Job {
   }
 
   private void saveMessageMetadata(Callable<Void> callable) {
-    Instant startTime = Instant.now();
-    Instant endTime = startTime.plusSeconds(10);
+    // message is already deleted so we can override no issue
+    if (getMessageMetadata().isDeleted()) {
+      try {
+        callable.call();
+      } catch (Exception e) {
+        log.error("Saving message metadata failed", e);
+      }
+      return;
+    }
+
+    // check if message has been deleted from some other flow
+    long endTime = System.currentTimeMillis() + 10 * Constants.ONE_MILLI;
     long sleepDuration = 100;
     Duration lockDuration = Duration.ofSeconds(1);
     String lockKey = getMessageId();
     String lockValue = UUID.randomUUID().toString();
-    while (endTime.isBefore(startTime)) {
+    while (System.currentTimeMillis() < endTime) {
       if (!rqueueLockManager.acquireLock(lockKey, lockValue, lockDuration)) {
         TimeoutUtils.sleep(sleepDuration);
       } else {
         MessageMetadata localMessageMetadata = getMessageMetadata();
-        MessageMetadata messageMetadata = getLatestMessageMetadata();
-        if (messageMetadata.isDeleted() && !localMessageMetadata.isDeleted()) {
-          localMessageMetadata.setDeleted(true);
-        }
+        localMessageMetadata.merge(getLatestMessageMetadata());
         try {
           callable.call();
           // success in update so return
@@ -332,9 +339,16 @@ public class JobImpl implements Job {
     // 1. Message was deleted while executing, this means local copy is stale
     // 2. Parallel update is being made [dashboard operation, periodic job (two periodic jobs can
     // run in parallel due to failure)]
-    if (messageStatus.isTerminalState()) {
+    if (!messageStatus.isTerminalState() || getRqueueMessage().isPeriodic()) {
+      Duration duration = rqueueConfig.getMessageDurability(getRqueueMessage().getPeriod());
+      saveMessageMetadata(
+          () -> {
+            messageMetadataService.save(getMessageMetadata(), duration);
+            return null;
+          });
+    } else {
       long ttl = rqueueConfig.getMessageDurabilityInMinute();
-      if (ttl == 0 || !rqueueConfig.messageInTerminalStateShouldBeStored()) {
+      if (ttl <= 0 || !rqueueConfig.messageInTerminalStateShouldBeStored()) {
         this.messageMetadataService.delete(rqueueJob.getMessageMetadata().getId());
       } else {
         saveMessageMetadata(
@@ -346,14 +360,6 @@ public class JobImpl implements Job {
               return null;
             });
       }
-    } else {
-      saveMessageMetadata(
-          () -> {
-            messageMetadataService.save(
-                getMessageMetadata(),
-                Duration.ofMinutes(rqueueConfig.getMessageDurabilityInMinute()));
-            return null;
-          });
     }
     save();
   }
@@ -372,7 +378,7 @@ public class JobImpl implements Job {
   void updateExecutionTime(RqueueMessage rqueueMessage, MessageStatus messageStatus) {
     long executionTime = getExecutionTime();
     rqueueJob.getMessageMetadata().setRqueueMessage(rqueueMessage);
-    if (getRqueueMessage().isPeriodicTask()) {
+    if (getRqueueMessage().isPeriodic()) {
       this.rqueueJob.getMessageMetadata().setTotalExecutionTime(executionTime);
     } else {
       this.rqueueJob

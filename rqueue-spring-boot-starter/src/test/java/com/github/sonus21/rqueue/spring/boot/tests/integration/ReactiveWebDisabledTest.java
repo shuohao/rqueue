@@ -1,16 +1,16 @@
 /*
- *  Copyright 2021 Sonu Kumar
+ * Copyright (c) 2021-2023 Sonu Kumar
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * You may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *         https://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
- *   Unless required by applicable law or agreed to in writing, software
- *   distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
  *
  */
 
@@ -28,11 +28,7 @@ import com.github.sonus21.rqueue.models.request.MessageMoveRequest;
 import com.github.sonus21.rqueue.models.request.QueueExploreRequest;
 import com.github.sonus21.rqueue.spring.boot.reactive.ReactiveWebApplication;
 import com.github.sonus21.rqueue.spring.boot.tests.SpringBootIntegrationTest;
-import com.github.sonus21.rqueue.test.dto.Email;
-import com.github.sonus21.rqueue.test.dto.Job;
 import com.github.sonus21.rqueue.test.tests.BasicListenerTest;
-import com.github.sonus21.rqueue.utils.Constants;
-import com.github.sonus21.rqueue.utils.TimeoutUtils;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
@@ -54,42 +50,43 @@ import reactor.core.publisher.Mono;
 @Slf4j
 @TestPropertySource(
     properties = {
-      "rqueue.retry.per.poll=1000",
-      "spring.redis.port=8018",
-      "reservation.request.dead.letter.consumer.enabled=true",
-      "reservation.request.active=true",
-      "list.email.queue.enabled=true",
-      "mysql.db.name=ReactiveWebDisabledTest",
-      "use.system.redis=false",
-      "user.banned.queue.active=true",
-      "spring.main.web-application-type=reactive",
-      "rqueue.reactive.enabled=true",
-      "rqueue.web.enable=false",
+        "rqueue.retry.per.poll=1000",
+        "spring.data.redis.port=8018",
+        "reservation.request.dead.letter.consumer.enabled=true",
+        "reservation.request.active=true",
+        "list.email.queue.enabled=true",
+        "mysql.db.name=ReactiveWebDisabledTest",
+        "use.system.redis=false",
+        "user.banned.queue.active=true",
+        "spring.main.web-application-type=reactive",
+        "rqueue.reactive.enabled=true",
+        "rqueue.web.enable=false",
     })
 @SpringBootIntegrationTest
 @EnabledIfEnvironmentVariable(named = "RQUEUE_REACTIVE_ENABLED", matches = "true")
 class ReactiveWebDisabledTest extends BasicListenerTest {
 
-  @Autowired private WebTestClient webTestClient;
+  @Autowired
+  private WebTestClient webTestClient;
 
   @ParameterizedTest
   @ValueSource(
       strings = {
-        "",
-        "queues",
-        "running",
-        "scheduled",
-        "dead",
-        "pending",
-        "utility",
-        "queues/test-queue",
-        "api/v1/aggregate-data-selector?type=WEEKLY",
-        "api/v1/jobs?message-id=1234567890"
+          "",
+          "/queues",
+          "/running",
+          "/scheduled",
+          "/dead",
+          "/pending",
+          "/utility",
+          "/queues/test-queue",
+          "/api/v1/aggregate-data-selector?type=WEEKLY",
+          "/api/v1/jobs?message-id=1234567890"
       })
   void testPath(String path) throws Exception {
     this.webTestClient
         .get()
-        .uri("/rqueue/" + path)
+        .uri("/rqueue" + path)
         .exchange()
         .expectStatus()
         .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE)
@@ -100,14 +97,6 @@ class ReactiveWebDisabledTest extends BasicListenerTest {
 
   @Test
   void getChartLatency() throws Exception {
-    for (int i = 0; i < 100; i++) {
-      Job job = Job.newInstance();
-      enqueue(jobQueue, job);
-    }
-    TimeoutUtils.waitFor(
-        () -> getMessageCount(jobQueue) == 0,
-        Constants.SECONDS_IN_A_MINUTE * Constants.ONE_MILLI,
-        "Job to run");
     ChartDataRequest chartDataRequest =
         new ChartDataRequest(ChartType.LATENCY, AggregationType.DAILY);
     this.webTestClient
@@ -125,7 +114,6 @@ class ReactiveWebDisabledTest extends BasicListenerTest {
 
   @Test
   void exploreData() throws Exception {
-    enqueue(emailDeadLetterQueue, i -> Email.newInstance(), 30, true);
     QueueExploreRequest request = new QueueExploreRequest();
     request.setType(DataType.LIST);
     request.setSrc(emailQueue);
@@ -197,7 +185,6 @@ class ReactiveWebDisabledTest extends BasicListenerTest {
 
   @Test
   void viewData() throws Exception {
-    enqueue(emailDeadLetterQueue, i -> Email.newInstance(), 30, true);
     DateViewRequest dateViewRequest = new DateViewRequest();
     dateViewRequest.setName(emailDeadLetterQueue);
     dateViewRequest.setType(DataType.LIST);

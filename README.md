@@ -8,6 +8,7 @@
 [![Maven Central](https://img.shields.io/maven-central/v/com.github.sonus21/rqueue-core)](https://repo1.maven.org/maven2/com/github/sonus21/rqueue-core)
 [![Javadoc](https://javadoc.io/badge2/com.github.sonus21/rqueue-core/javadoc.svg)](https://javadoc.io/doc/com.github.sonus21/rqueue-core)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Source Dashboard](https://sourcespy.com/shield.svg)](https://sourcespy.com/github/sonus21rqueue/)
 
 **Rqueue** is an asynchronous task executor(worker) built for spring and spring-boot framework based
 on the spring framework's messaging library backed by Redis. It can be used as message broker as
@@ -52,8 +53,9 @@ well, where all services code is in Spring.
 
 ### Requirements
 
-* Spring 5+
-* Spring boot 2+
+* Spring 5+, 6+
+* Java 1.8+,17
+* Spring boot 2+,3+
 * Lettuce client for Redis cluster
 * Read master preference for Redis cluster
 
@@ -61,49 +63,63 @@ well, where all services code is in Spring.
 
 ### Dependency
 
-Snapshot Version: [https://s01.oss.sonatype.org/content/repositories/snapshots/com/github/sonus21/](https://s01.oss.sonatype.org/content/repositories/snapshots/com/github/sonus21/)
-Release Version: [Maven central](https://search.maven.org/search?q=g:com.github.sonus21)
+Snapshot
+Version: [https://s01.oss.sonatype.org/content/repositories/snapshots/com/github/sonus21/](https://s01.oss.sonatype.org/content/repositories/snapshots/com/github/sonus21/)
+<br/>Release Version: [Maven central](https://search.maven.org/search?q=g:com.github.sonus21)
 
-#### Spring-boot
+#### Spring Boot
 
-* Get the latest one
-  from [Maven central](https://search.maven.org/search?q=g:com.github.sonus21%20AND%20a:rqueue-spring-boot-starter)
+**NOTE:**
+
+* For spring boot 2.x use Rqueue 2.x
+* For spring boot 3.x use Rqueue 3.x
+
+Get the latest one
+from [Maven central](https://search.maven.org/search?q=g:com.github.sonus21%20AND%20a:rqueue-spring-boot-starter)
+
 * Add dependency
   * Gradle
     ```groovy
-        implementation 'com.github.sonus21:rqueue-spring-boot-starter:2.11-RELEASE'
+        implementation 'com.github.sonus21:rqueue-spring-boot-starter:2.13.1-RELEASE'
     ```
   * Maven
     ```xml
      <dependency>
         <groupId>com.github.sonus21</groupId>
         <artifactId>rqueue-spring-boot-starter</artifactId>
-        <version>2.12.0-RELEASE</version>
+        <version>2.13.1-RELEASE</version>
     </dependency>
     ```
 
   No additional configurations are required, only dependency is required.
 
-#### Spring framework
+---
 
-* Get the latest one
-  from [Maven central](https://search.maven.org/search?q=g:com.github.sonus21%20AND%20a:rqueue-spring)
+#### Spring Framework
+
+**NOTE**
+
+* For spring framework 5.x use rqueue-spring 2.x
+* For spring framework 6.x use rqueue-spring 3.x
+
+Get the latest one
+from [Maven central](https://search.maven.org/search?q=g:com.github.sonus21%20AND%20a:rqueue-spring)
+
 * Add Dependency
   * Gradle
     ```groovy
-        implementation 'com.github.sonus21:rqueue-spring:2.12.0-RELEASE'
+        implementation 'com.github.sonus21:rqueue-spring:2.13.1-RELEASE'
     ```
   * Maven
     ```xml
      <dependency>
        <groupId>com.github.sonus21</groupId>
        <artifactId>rqueue-spring</artifactId>
-       <version>2.12.0-RELEASE</version>
+       <version>2.13.1-RELEASE</version>
      </dependency>
     ```
-
-2. Add annotation `EnableRqueue` on application config class
-3. Provide a RedisConnectionFactory bean
+* Add annotation `EnableRqueue` on application config class
+* Provide a RedisConnectionFactory bean
 
 ###### Configuration
 
@@ -111,7 +127,6 @@ Release Version: [Maven central](https://search.maven.org/search?q=g:com.github.
 
 @EnableRqueue
 public class Application {
-
   @Bean
   public RedisConnectionFactory redisConnectionFactory() {
     // return a redis connection factory
@@ -119,11 +134,13 @@ public class Application {
 }
 ```
 
+---
+
 ### Message publishing/Task submission
 
 All messages need to be sent using `RqueueMessageEnqueuer` bean's `enqueueXXX`, `enqueueInXXX`
 and `enqueueAtXXX` methods. It has handful number of `enqueue`, `enqueueIn`, `enqueueAt` methods, we
-can use one of them based on the use case.
+can use any one of them based on the use case.
 
 ```java
 public class MessageService {
@@ -162,13 +179,15 @@ public class MessageService {
     rqueueMessageEnqueuer.enqueueWithPriority("sms-queue", priority.value(), sms);
   }
 
-  // enqueue periodic job, email should be sent every 30 seconds
+  // Index chat every 1 minute
   public void sendPeriodicEmail(Email email) {
-    rqueueMessageEnqueuer.enqueuePeriodic("email-queue", invoice, 30_000);
+    rqueueMessageEnqueuer.enqueuePeriodic("chat-indexer", chatIndexer, 60_000);
   }
 
 }
 ```
+
+---
 
 ### Worker/Consumer/Task Executor/Listener
 
@@ -223,19 +242,19 @@ public class MessageListener {
 }
 ```
 
-## Queue Statistics
+---
+
+## Dashboard
+
+Link: [http://localhost:8080/rqueue](http://localhost:8080/rqueue)
+
+[![Dashboard](https://raw.githubusercontent.com/sonus21/rqueue/master/docs/static/stats-graph.png)](https://raw.githubusercontent.com/sonus21/rqueue/master/docs/static/stats-graph.png)
+
+#### Queue Statistics
 
 Micrometer based dashboard for queue
 
 [![Grafana Dashboard](https://raw.githubusercontent.com/sonus21/rqueue/master/docs/static/grafana-dashboard.png)](https://raw.githubusercontent.com/sonus21/rqueue/master/docs/static/grafana-dashboard.png)
-
-## Web
-
-Link: [http://localhost:8080/rqueue](http://localhost:8080/rqueue)
-
-#### Dashboard
-
-[![Dashboard](https://raw.githubusercontent.com/sonus21/rqueue/master/docs/static/stats-graph.png)](https://raw.githubusercontent.com/sonus21/rqueue/master/docs/static/stats-graph.png)
 
 #### Message Waiting For Execution
 
@@ -245,24 +264,37 @@ Link: [http://localhost:8080/rqueue](http://localhost:8080/rqueue)
 
 [![Jobs](https://raw.githubusercontent.com/sonus21/rqueue/master/docs/static/jobs.png)](https://raw.githubusercontent.com/sonus21/rqueue/master/docs/static/jobs.png)
 
+---
+
 ## Status
 
 Rqueue is stable and production ready, it's processing 100K+ messages daily in production
 environment.
+**Some of the Rqueue Users**
+
+<a href="https://airtel.africa" target="_blank">
+<img alt="Airtel" src="https://raw.githubusercontent.com/sonus21/rqueue/master/docs/static/users/airtel-africa.png" width="160" align="middle"/>
+</a>
+&nbsp;&nbsp;
+<a href="https://vonage.com" target="_blank">
+  <img alt="Vonage" src="https://raw.githubusercontent.com/sonus21/rqueue/master/docs/static/users/vonage.png" width="160" align="middle"/>
+</a>
+&nbsp;&nbsp;
+<a href="https://www.t-mobile.com" target="_blank">
+  <img alt="Vonage" src="https://raw.githubusercontent.com/sonus21/rqueue/master/docs/static/users/t-mobile.svg" align="middle"/>
+</a>
+&nbsp;&nbsp;
+<a href="https://line.me" target="_blank">
+  <img alt="Line Chat" src="https://raw.githubusercontent.com/sonus21/rqueue/master/docs/static/users/line.png" width="60" height="60" align="middle"/>
+</a>
 
 **We would love to add your organization name here, if you're one of the Rqueue users, please raise
 a
 PR/[issue](https://github.com/sonus21/rqueue/issues/new?template=i-m-using-rqueue.md&title=Add+my+organisation+in+Rqueue+Users)
 .**
 
-<a href="https://tuneyou.com"><img alt="TuneYou" src="https://raw.githubusercontent.com/sonus21/rqueue/master/docs/static/users/tuneyou.png" width="150" align="middle"/></a>
-&nbsp;&nbsp;
-<a href="https://www.pokerstarssports.eu"><img  alt="PokerStars" src="https://raw.githubusercontent.com/sonus21/rqueue/master/docs/static/users/pokerstars.png" width="250" align="middle"/></a>
-&nbsp;&nbsp;
-<a href="https://bitbot.plus"><img src="https://raw.githubusercontent.com/sonus21/rqueue/master/docs/static/users/bitbot.png" alt="Bitbot" height="60" align="middle"/></a>
-&nbsp;&nbsp;
-<a href="https://www.chaotiinfo.cn"><img src="https://raw.githubusercontent.com/sonus21/rqueue/master/docs/static/users/chaoti-info.png" alt="CHAOTI INFO TECH(SHENZHEN)" height="60" align="middle"/></a>
-&nbsp;&nbsp;
+
+---
 
 <!---- Signing Key
 ~/.gradle/gradle.properties file
@@ -286,39 +318,29 @@ signing.secretKeyRingFile=/Users/sonu/.gnupg/secring.gpg generate this as `gpg -
 
 * Please report bug,question,feature(s)
   to [issue](https://github.com/sonus21/rqueue/issues/new/choose) tracker.
-* Ask question on StackOverflow using [rqueue](https://stackoverflow.com/tags/rqueue) tag
+* Ask question on StackOverflow using [#rqueue](https://stackoverflow.com/tags/rqueue) tag
 
 ## Contribution
 
 You are most welcome for any pull requests for any feature/bug/enhancement. You would need Java8 and
 gradle to start with. In root `build.gradle` file comment out spring related versions, or set
-environment variables for Spring versions.
+environment variables for Spring versions. You can use [module, class and other diagrams](https://sourcespy.com/github/sonus21rqueue/) 
+to familiarise yourself with the project.
 
 **Please format your code with Google Java formatter.**
 
-```groovy
-// springBootVersion = '2.0.6.RELEASE'
-// springVersion = '5.0.10.RELEASE'
-// springDataVersion = '2.0.6.RELEASE'
-// microMeterVersion = '1.1.0'
-```
-
 ## Links
 
-* Documentation:
-  [https://github.com/sonus21/rqueue/wiki](https://github.com/sonus21/rqueue/wiki)
-* Releases:
-  [https://github.com/sonus21/rqueue/releases](https://github.com/sonus21/rqueue/releases)
-* Issue tracker:
-  [https://github.com/sonus21/rqueue/issues](https://github.com/sonus21/rqueue/issues)
+* Documentation: [https://sonus21.github.io/rqueue](https://sonus21.github.io/rqueue)
+* Releases: [https://github.com/sonus21/rqueue/releases](https://github.com/sonus21/rqueue/releases)
+* Issue tracker: [https://github.com/sonus21/rqueue/issues](https://github.com/sonus21/rqueue/issues)
 * Maven Central:
   * [https://repo1.maven.org/maven2/com/github/sonus21/rqueue-spring](https://repo1.maven.org/maven2/com/github/sonus21/rqueue-spring)
   * [https://repo1.maven.org/maven2/com/github/sonus21/rqueue-spring-boot-starter](https://repo1.maven.org/maven2/com/github/sonus21/rqueue-spring-boot-starter)
-
+  
 * StackOverflow: [https://stackoverflow.com/tags/rqueue](https://stackoverflow.com/tags/rqueue)
 * Discord: https://discord.gg/2hgQZXS2
-* Project
-  Progress: [https://github.com/sonus21/rqueue/projects/3](https://github.com/sonus21/rqueue/projects/3)
+* Project Progress: [https://github.com/sonus21/rqueue/projects/3](https://github.com/sonus21/rqueue/projects/3)
 
 ## License
 

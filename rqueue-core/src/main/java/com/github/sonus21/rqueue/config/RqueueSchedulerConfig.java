@@ -1,21 +1,22 @@
 /*
- *  Copyright 2021 Sonu Kumar
+ * Copyright (c) 2020-2023 Sonu Kumar
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * You may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *         https://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
- *   Unless required by applicable law or agreed to in writing, software
- *   distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
  *
  */
 
 package com.github.sonus21.rqueue.config;
 
+import com.github.sonus21.rqueue.utils.Constants;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.beans.factory.annotation.Value;
@@ -68,8 +69,26 @@ public class RqueueSchedulerConfig {
   @Value("${rqueue.scheduler.scheduled.message.time.interval:2000}")
   private long scheduledMessageTimeIntervalInMilli;
 
+  // How long the application should wait for task termination
+  @Value("${rqueue.scheduler.termination.wait.time:200}")
+  private long terminationWaitTime;
 
   // Maximum delay for message mover task due to failure
   @Value("${rqueue.scheduler.max.message.mover.delay:60000}")
   private long maxMessageMoverDelay;
+
+  // Minimum amount of time between two consecutive message move calls
+  @Value("${rqueue.scheduler.min.message.mover.delay:100}")
+  private long minMessageMoverDelay;
+
+  // Maximum number of messages that should be copied from scheduled to normal queue
+  @Value("${rqueue.scheduler.max.message.count:100}")
+  private long maxMessageCount;
+
+  public long minMessageMoveDelay() {
+    if (minMessageMoverDelay <= 0) {
+      return Constants.MIN_SCHEDULE_INTERVAL;
+    }
+    return minMessageMoverDelay;
+  }
 }

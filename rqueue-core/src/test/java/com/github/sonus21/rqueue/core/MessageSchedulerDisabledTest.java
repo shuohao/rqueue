@@ -1,16 +1,16 @@
 /*
- *  Copyright 2021 Sonu Kumar
+ * Copyright (c) 2020-2023 Sonu Kumar
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * You may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *         https://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
- *   Unless required by applicable law or agreed to in writing, software
- *   distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
  *
  */
 
@@ -48,9 +48,12 @@ class MessageSchedulerDisabledTest extends TestBase {
 
   private final String slowQueue = "slow-queue";
   private final QueueDetail slowQueueDetail = TestUtils.createQueueDetail(slowQueue);
-  @Mock private RqueueSchedulerConfig rqueueSchedulerConfig;
-  @Mock private RqueueConfig rqueueConfig;
-  @Mock private RedisTemplate<String, Long> redisTemplate;
+  @Mock
+  private RqueueSchedulerConfig rqueueSchedulerConfig;
+  @Mock
+  private RqueueConfig rqueueConfig;
+  @Mock
+  private RedisTemplate<String, Long> redisTemplate;
 
   @BeforeEach
   public void init() {
@@ -63,6 +66,7 @@ class MessageSchedulerDisabledTest extends TestBase {
   void startShouldSubmitsTaskWhenRedisIsDisabled() throws Exception {
     doReturn(1).when(rqueueSchedulerConfig).getScheduledMessageThreadPoolSize();
     doReturn(true).when(rqueueSchedulerConfig).isEnabled();
+    doReturn(true).when(rqueueSchedulerConfig).isAutoStart();
     TestTaskScheduler scheduler = new TestTaskScheduler();
     try (MockedStatic<ThreadUtils> threadUtils = Mockito.mockStatic(ThreadUtils.class)) {
       threadUtils
@@ -70,7 +74,7 @@ class MessageSchedulerDisabledTest extends TestBase {
           .thenReturn(scheduler);
       messageScheduler.onApplicationEvent(new RqueueBootstrapEvent("Test", true));
       assertEquals(1, scheduler.submittedTasks());
-      assertNull(FieldUtils.readField(messageScheduler, "messageSchedulerListener", true));
+      assertNull(messageScheduler.redisScheduleTriggerHandler);
       messageScheduler.destroy();
     }
   }
@@ -83,8 +87,7 @@ class MessageSchedulerDisabledTest extends TestBase {
     assertNull(FieldUtils.readField(messageScheduler, "scheduler", true));
     assertNull(FieldUtils.readField(messageScheduler, "queueRunningState", true));
     assertNull(FieldUtils.readField(messageScheduler, "queueNameToScheduledTask", true));
-    assertNull(FieldUtils.readField(messageScheduler, "channelNameToQueueName", true));
-    assertNull(FieldUtils.readField(messageScheduler, "queueNameToLastMessageScheduleTime", true));
+    assertNull(FieldUtils.readField(messageScheduler, "queueNameToNextRunTime", true));
   }
 
   @Test
@@ -109,7 +112,6 @@ class MessageSchedulerDisabledTest extends TestBase {
     assertNull(FieldUtils.readField(messageScheduler, "scheduler", true));
     assertNull(FieldUtils.readField(messageScheduler, "queueRunningState", true));
     assertNull(FieldUtils.readField(messageScheduler, "queueNameToScheduledTask", true));
-    assertNull(FieldUtils.readField(messageScheduler, "channelNameToQueueName", true));
-    assertNull(FieldUtils.readField(messageScheduler, "queueNameToLastMessageScheduleTime", true));
+    assertNull(FieldUtils.readField(messageScheduler, "queueNameToNextRunTime", true));
   }
 }

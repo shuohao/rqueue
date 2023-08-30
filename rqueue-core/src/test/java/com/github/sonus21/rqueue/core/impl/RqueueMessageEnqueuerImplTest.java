@@ -1,16 +1,16 @@
 /*
- *  Copyright 2021 Sonu Kumar
+ * Copyright (c) 2021-2023 Sonu Kumar
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * You may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *         https://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
- *   Unless required by applicable law or agreed to in writing, software
- *   distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
  *
  */
 
@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.github.sonus21.TestBase;
 import com.github.sonus21.rqueue.CoreUnitTest;
+import com.github.sonus21.rqueue.config.RqueueConfig;
 import com.github.sonus21.rqueue.core.DefaultRqueueMessageConverter;
 import com.github.sonus21.rqueue.core.EndpointRegistry;
 import com.github.sonus21.rqueue.core.RqueueMessageEnqueuer;
@@ -28,7 +29,9 @@ import com.github.sonus21.rqueue.listener.QueueDetail;
 import com.github.sonus21.rqueue.listener.RqueueMessageHeaders;
 import com.github.sonus21.rqueue.utils.Constants;
 import com.github.sonus21.rqueue.utils.TestUtils;
+import com.github.sonus21.rqueue.web.service.RqueueMessageMetadataService;
 import java.util.UUID;
+import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,7 +48,12 @@ class RqueueMessageEnqueuerImplTest extends TestBase {
   private static final QueueDetail queueDetail = TestUtils.createQueueDetail(queue);
   MessageConverter messageConverter = new DefaultRqueueMessageConverter();
   MessageHeaders messageHeaders = RqueueMessageHeaders.emptyMessageHeaders();
-  @Mock private RqueueMessageTemplate messageTemplate;
+  @Mock
+  private RqueueMessageMetadataService rqueueMessageMetadataService;
+  @Mock
+  private RqueueMessageTemplate messageTemplate;
+  @Mock
+  private RqueueConfig rqueueConfig;
   private RqueueMessageEnqueuer rqueueMessageEnqueuer;
 
   @BeforeAll
@@ -60,10 +68,13 @@ class RqueueMessageEnqueuerImplTest extends TestBase {
   }
 
   @BeforeEach
-  public void init() {
+  public void init() throws IllegalAccessException {
     MockitoAnnotations.openMocks(this);
     rqueueMessageEnqueuer =
         new RqueueMessageEnqueuerImpl(messageTemplate, messageConverter, messageHeaders);
+    FieldUtils.writeField(rqueueMessageEnqueuer, "rqueueConfig", rqueueConfig, true);
+    FieldUtils.writeField(rqueueMessageEnqueuer, "rqueueMessageMetadataService",
+        rqueueMessageMetadataService, true);
   }
 
   @Test

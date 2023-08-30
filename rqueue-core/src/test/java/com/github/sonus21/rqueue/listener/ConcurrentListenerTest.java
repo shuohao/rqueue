@@ -1,16 +1,16 @@
 /*
- *  Copyright 2021 Sonu Kumar
+ * Copyright (c) 2021-2023 Sonu Kumar
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * You may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *         https://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
- *   Unless required by applicable law or agreed to in writing, software
- *   distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
  *
  */
 
@@ -19,13 +19,16 @@ package com.github.sonus21.rqueue.listener;
 import static com.github.sonus21.rqueue.utils.TimeoutUtils.waitFor;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 
 import com.github.sonus21.AtomicValueHolder;
 import com.github.sonus21.TestBase;
 import com.github.sonus21.rqueue.CoreUnitTest;
 import com.github.sonus21.rqueue.annotation.RqueueListener;
+import com.github.sonus21.rqueue.common.RqueueLockManager;
 import com.github.sonus21.rqueue.config.RqueueConfig;
 import com.github.sonus21.rqueue.config.RqueueWebConfig;
 import com.github.sonus21.rqueue.core.RqueueBeanProvider;
@@ -36,8 +39,10 @@ import com.github.sonus21.rqueue.models.db.MessageMetadata;
 import com.github.sonus21.rqueue.models.enums.MessageStatus;
 import com.github.sonus21.rqueue.utils.TimeoutUtils;
 import com.github.sonus21.rqueue.web.service.RqueueMessageMetadataService;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -59,14 +64,23 @@ class ConcurrentListenerTest extends TestBase {
   private static final String fastProcessingQueue = "rqueue-processing::" + fastQueue;
   private static final String fastProcessingQueueChannel =
       "rqueue-processing-channel::" + fastQueue;
-  private static final long executionTime = 2L;
-  @Mock private RqueueMessageHandler rqueueMessageHandler;
-  @Mock private RedisConnectionFactory redisConnectionFactory;
-  @Mock private ApplicationEventPublisher applicationEventPublisher;
-  @Mock private RqueueMessageTemplate rqueueMessageTemplate;
-  @Mock private RqueueSystemConfigDao rqueueSystemConfigDao;
-  @Mock private RqueueMessageMetadataService rqueueMessageMetadataService;
-  @Mock private RqueueWebConfig rqueueWebConfig;
+  private static final long executionTime = 50L;
+  @Mock
+  private RqueueMessageHandler rqueueMessageHandler;
+  @Mock
+  private RedisConnectionFactory redisConnectionFactory;
+  @Mock
+  private ApplicationEventPublisher applicationEventPublisher;
+  @Mock
+  private RqueueMessageTemplate rqueueMessageTemplate;
+  @Mock
+  private RqueueSystemConfigDao rqueueSystemConfigDao;
+  @Mock
+  private RqueueMessageMetadataService rqueueMessageMetadataService;
+  @Mock
+  private RqueueLockManager rqueueLockManager;
+  @Mock
+  private RqueueWebConfig rqueueWebConfig;
   private RqueueBeanProvider beanProvider;
 
   @BeforeEach
@@ -80,6 +94,7 @@ class ConcurrentListenerTest extends TestBase {
     beanProvider.setApplicationEventPublisher(applicationEventPublisher);
     beanProvider.setRqueueMessageTemplate(rqueueMessageTemplate);
     beanProvider.setRqueueMessageMetadataService(rqueueMessageMetadataService);
+    beanProvider.setRqueueLockManager(rqueueLockManager);
     beanProvider.setRqueueWebConfig(rqueueWebConfig);
   }
 
@@ -103,36 +118,44 @@ class ConcurrentListenerTest extends TestBase {
     AtomicValueHolder<Long> firstCallAt = new AtomicValueHolder<>();
     AtomicInteger producerMessageCounter = new AtomicInteger(0);
     AtomicInteger pollCounter = new AtomicInteger(0);
-
+    Map<String, MessageMetadata> messageMetadataMap = new HashMap<>();
+    doReturn(true).when(rqueueLockManager).acquireLock(anyString(), anyString(), any());
     doAnswer(
-            i -> {
-              RqueueMessage rqueueMessage = i.getArgument(0);
-              return new MessageMetadata(rqueueMessage, MessageStatus.ENQUEUED);
-            })
+        i -> {
+          RqueueMessage rqueueMessage = i.getArgument(0);
+          MessageMetadata messageMetadata = new MessageMetadata(rqueueMessage,
+              MessageStatus.ENQUEUED);
+          messageMetadataMap.put(messageMetadata.getId(), messageMetadata);
+          return messageMetadata;
+        })
         .when(rqueueMessageMetadataService)
         .getOrCreateMessageMetadata(any());
     doAnswer(
-            invocation -> {
-              if (1 == pollCounter.incrementAndGet()) {
-                firstCallAt.set(System.currentTimeMillis());
-              }
-              int count = invocation.getArgument(4);
-              List<RqueueMessage> rqueueMessageList = new LinkedList<>();
-              for (int i = 0; i < count; i++) {
-                int id = producerMessageCounter.incrementAndGet();
-                RqueueMessage rqueueMessage =
-                    RqueueMessage.builder()
-                        .message("Message ::" + id + "::" + i)
-                        .id(UUID.randomUUID().toString())
-                        .queueName(fastQueue)
-                        .processAt(System.currentTimeMillis())
-                        .queuedTime(System.currentTimeMillis())
-                        .build();
-                rqueueMessageList.add(rqueueMessage);
-              }
-              lastCalledAt.set(System.currentTimeMillis());
-              return rqueueMessageList;
-            })
+        i -> messageMetadataMap.get(i.getArgument(0)))
+        .when(rqueueMessageMetadataService)
+        .get(any());
+    doAnswer(
+        invocation -> {
+          if (1 == pollCounter.incrementAndGet()) {
+            firstCallAt.set(System.currentTimeMillis());
+          }
+          int count = invocation.getArgument(4);
+          List<RqueueMessage> rqueueMessageList = new LinkedList<>();
+          for (int i = 0; i < count; i++) {
+            int id = producerMessageCounter.incrementAndGet();
+            RqueueMessage rqueueMessage =
+                RqueueMessage.builder()
+                    .message("Message ::" + id + "::" + i)
+                    .id(UUID.randomUUID().toString())
+                    .queueName(fastQueue)
+                    .processAt(System.currentTimeMillis())
+                    .queuedTime(System.currentTimeMillis())
+                    .build();
+            rqueueMessageList.add(rqueueMessage);
+          }
+          lastCalledAt.set(System.currentTimeMillis());
+          return rqueueMessageList;
+        })
         .when(rqueueMessageTemplate)
         .pop(
             eq(fastQueue),
@@ -141,8 +164,6 @@ class ConcurrentListenerTest extends TestBase {
             eq(900000L),
             anyInt());
     container.afterPropertiesSet();
-    // 40 * 20 => 800
-    long start = System.currentTimeMillis();
     container.start();
 
     long end = System.currentTimeMillis() + TimeoutUtils.EXECUTION_TIME;
