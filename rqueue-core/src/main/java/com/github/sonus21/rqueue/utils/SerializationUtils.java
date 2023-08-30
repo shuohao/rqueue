@@ -18,12 +18,14 @@ package com.github.sonus21.rqueue.utils;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 public final class SerializationUtils {
 
   public static final byte[] EMPTY_ARRAY = new byte[0];
 
-  private SerializationUtils() {}
+  private SerializationUtils() {
+  }
 
   public static boolean isEmpty(byte[] bytes) {
     return bytes == null || bytes.length == 0;
@@ -38,6 +40,7 @@ public final class SerializationUtils {
   public static ObjectMapper createObjectMapper() {
     ObjectMapper mapper = new ObjectMapper();
     mapper = mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    mapper.registerModule(new JavaTimeModule());
     return mapper;
   }
 }
